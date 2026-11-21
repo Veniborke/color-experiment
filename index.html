@@ -168,3 +168,4 @@ function csv(){
 }
 (async function(){await loadCfg();var me=ls("me");if(me){var p=ls("p_"+me);if(p){S=p;if(FB_URL){try{var q=await getJ("participants/"+me);if(q){S=Object.assign(p,q);if(!S.choices)S.choices=[]}else{ls("p_"+me,null);ls("me",null);view(reg);return}}catch(e){}}next();return}}view(reg)})();
 </script></body></html>
+
