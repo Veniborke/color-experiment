@@ -1,171 +1,341 @@
 <!DOCTYPE html>
+
 <html lang="ko"><head><meta charset="utf-8"><title>색상 선택 실험</title>
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
 <style>
+
 :root{box-sizing:border-box;--bg:#eef6fc;--card:#fff;--ink:#0f1f3d;--mut:#5c6b85;--red:#e5384f;--blue:#2f6fe4;--line:#d5e3f1}
+
 @media (prefers-color-scheme:dark){:root{--bg:#0b1426;--card:#142038;--ink:#eaf1ff;--mut:#9fb0cc;--line:#26365a}}
+
 *{box-sizing:border-box}
+
 body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;min-height:100vh}
+
 main{max-width:480px;margin:0 auto;padding:18px}
+
 .card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;margin-bottom:14px}
+
 h1{font-size:22px;margin:4px 0 12px}h2{font-size:18px;margin:12px 0 8px}p,li{line-height:1.55;font-size:14px}.mut{color:var(--mut);font-size:13px}
+
 input,select,textarea{width:100%;padding:13px 14px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:16px;margin:4px 0 10px;font-family:inherit}
+
 label{font-size:13px;color:var(--mut)}
+
 button{font:inherit;cursor:pointer;border:0;border-radius:999px;padding:14px 20px;font-weight:700;background:#14284f;color:#fff;width:100%}
+
 button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);width:auto;padding:8px 14px;font-size:13px}
+
 .row{display:flex;gap:12px}.row>button{flex:1;height:120px;font-size:20px;border-radius:28px;transition:transform .1s}
+
 .row>button:active{transform:scale(.95)}.r{background:var(--red)}.b{background:var(--blue)}
+
 .bar{height:10px;background:var(--line);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--blue);transition:width .4s}
+
 .score{font-size:44px;font-weight:800;text-align:center;margin:6px 0}.score.pop{animation:pop .4s}
+
 @keyframes pop{50%{transform:scale(1.25)}}
+
 .float{position:fixed;left:50%;top:38%;font-size:34px;font-weight:800;animation:fl 1s forwards;pointer-events:none;transform:translateX(-50%)}
+
 @keyframes fl{to{transform:translate(-50%,-80px);opacity:0}}
+
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+
 .warn{background:#fff3d6;color:#5a4300;border-radius:14px;padding:10px 12px;font-size:12.5px;margin-bottom:12px}
+
 .err{color:var(--red);font-size:13px;min-height:18px}
+
 .hb{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0}.hb span:first-child{width:90px}.hb div{flex:1}
+
 </style></head><body><main id="app"></main>
+
 <script>
+
 /* ===== 설정: Supabase 값을 아래 따옴표 안에 붙여 넣으세요 ===== */
+
 var SB_URL="https://urdkwtvaqgmzjvxjuuxb.supabase.co";
+
 var SB_KEY="sb_publishable_9McSrFTDcHcza9T-mOto0Q_8kyK2maf";
+
 var FB_URL=(SB_URL&&SB_KEY)?SB_URL:"";
+
 var PWH="86853ece4e2ce6de7f3516048b854f9c3779cbaf5bf17a99a2f2a825b53b4d62";
+
 var S={sid:"",name:"",nick:"",pref:null,choices:[],score:0,done:false},cfg={red:10,blue:2,tie:"time"};
+
 var sound=true,ac=null,TOTAL=9,adminOK=false,timer=null,cur=function(){};
+
 var app=document.getElementById("app");
+
 function $(s){return document.querySelector(s)}
+
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+
 function ls(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k));if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}}
+
 function beep(f,d){if(!sound)return;try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();var o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.08;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+
 async function api(p,m,b,h){
+
   m=m||"GET";var base=SB_URL.replace(/\/$/,"")+"/rest/v1/kv",H={apikey:SB_KEY,"Content-Type":"application/json"};
+
   var coll=p.indexOf("/")<0&&p!=="config",flt=coll?"path=like."+encodeURIComponent(p+"/*"):"path=eq."+encodeURIComponent(p);
+
   if(m==="GET"){var r=await fetch(base+"?"+flt+"&select=path,val",{headers:H});if(!r.ok)return r;var a=await r.json(),out;
+
     if(coll){out={};a.forEach(function(x){out[x.path.slice(p.length+1)]=x.val})}else out=a.length?a[0].val:null;
+
     return{ok:true,status:200,json:async function(){return out}}}
+
   if(m==="DELETE")return fetch(base+"?"+flt,{method:"DELETE",headers:H});
+
   var ex=h&&h["if-match"];
+
   var r2=await fetch(base,{method:"POST",headers:Object.assign({},H,{Prefer:ex?"return=minimal":"resolution=merge-duplicates,return=minimal"}),body:JSON.stringify({path:p,val:b})});
+
   if(ex&&r2.status===409)return{ok:false,status:412};
+
   return r2
+
 }
+
 async function getJ(p){var r=await api(p);if(!r.ok)throw new Error("서버 오류 "+r.status);return r.json()}
+
 var TOK=ls("tok");if(!TOK){TOK=Math.random().toString(36).slice(2)+Date.now().toString(36);ls("tok",TOK)}
+
 function banner(){return FB_URL?"":'<div class="warn">서버 저장소가 아직 연결되지 않아 이 기기 안에서만 기록됩니다. 순위표와 중복 검사가 다른 기기와 공유되지 않습니다.</div>'}
+
 function head(){return '<div class="top"><span><button class="ghost" onclick="goHome()">홈</button> <b>색상 선택 실험</b></span><span><button class="ghost" onclick="toggleSnd()">'+(sound?"소리 켬":"소리 끔")+'</button> <button class="ghost" onclick="adminEntry()">관리자</button></span></div>'+banner()}
+
 function goHome(){view(reg)}
+
 function toggleSnd(){sound=!sound;beep(600,.05);cur()}
+
 function view(fn){clearInterval(timer);cur=fn;fn();if(fn===board)timer=setInterval(board,6000);if(fn===adminView)timer=setInterval(loadParts,6000)}
+
 function showErr(e){var d=document.createElement("div");d.className="warn";d.textContent="오류: "+(e&&e.message||e);app.insertBefore(d,app.firstChild)}
+
 window.addEventListener("error",function(ev){showErr(ev.error||ev.message)});
+
 async function loadCfg(){if(!FB_URL)return;try{var c=await getJ("config");if(c)cfg=Object.assign(cfg,c)}catch(e){}}
 
+
+
 function reg(){app.innerHTML=head()+'<div class="card"><h1>참가자 등록</h1><label>학번</label><input id="sid" inputmode="numeric" maxlength="10"><label>이름</label><input id="nm" maxlength="10"><label>닉네임 (순위표에 공개)</label><input id="nk" maxlength="10"><p class="mut">수집 항목: 학번, 이름, 닉네임, 선택 기록. 학번과 이름은 순위표에 표시되지 않으며 실험 운영자만 확인합니다. 연구 종료 후 파기하며, 담당 교사의 승인과 학교의 개인정보 처리 기준에 따라 운영됩니다.</p><label><input type="checkbox" id="ag" style="width:auto;margin:0 6px 0 0">위 안내를 읽고 동의합니다</label><p class="err" id="err"></p><button onclick="register()">다음</button><p style="text-align:center"><button class="ghost" onclick="view(board)">순위표 보기</button></p></div>'}
+
 async function register(){
+
   var e=$("#err"),sid=$("#sid").value.trim(),nm=$("#nm").value.trim(),nk=$("#nk").value.trim()||nm;
+
   if(!sid||!nm){e.textContent="학번과 이름을 입력해 주세요.";return}
+
   if(!$("#ag").checked){e.textContent="개인정보 수집·이용에 동의해야 참여할 수 있습니다.";return}
+
   sid=sid.replace(/[^0-9A-Za-z]/g,"");if(!sid){e.textContent="학번 형식을 확인해 주세요.";return}
+
   var base={sid:sid,name:nm,nick:nk,pref:null,choices:[],score:0,done:false};
+
   try{
+
     if(FB_URL){
+
       var r=await api("claims/"+sid,"PUT",{tok:TOK,t:Date.now()},{"if-match":"null_etag"});
+
       if(r.status===412){
+
         var c=await getJ("claims/"+sid);
+
         if(!c||c.tok!==TOK){e.textContent="이미 참여한 학번입니다. 다시 참여할 수 없습니다.";return}
+
         var p=await getJ("participants/"+sid);S=p?Object.assign(base,p):base;if(!S.choices)S.choices=[]
+
       }else if(r.ok){S=base;await api("participants/"+sid,"PUT",S)}
+
       else throw new Error("서버 연결 실패 ("+r.status+")")
+
     }else{
+
       var ex=ls("p_"+sid);if(ex&&ls("me")!==sid){e.textContent="이미 참여한 학번입니다. 다시 참여할 수 없습니다.";return}
+
       S=ex||base;ls("p_"+sid,S)
+
     }
+
   }catch(err){e.textContent="저장소에 연결하지 못했습니다. 인터넷 연결을 확인해 주세요.";return}
+
   ls("me",sid);ls("p_"+sid,S);next()
+
 }
+
 function next(){if(!S.sid)view(reg);else if(S.done)view(result);else if(S.pref===null&&S.choices.length==0)view(intro);else if(S.pref===null)view(showPref);else view(play)}
+
 function intro(){app.innerHTML=head()+'<div class="card"><h1>실험 안내</h1><ol><li>먼저 평소 더 좋아하는 색을 한 번 고릅니다. (점수 없음)</li><li>이후 '+TOTAL+'번, 빨강과 파랑 중 하나를 고릅니다.</li><li>선택할 때마다 점수가 올라갑니다. 점수가 높은 색이 무엇인지는 직접 알아내 보세요.</li></ol><button onclick="startExp()">시작하기</button></div>'}
+
 function startExp(){try{view(showPref)}catch(e){showErr(e)}}
+
 function showPref(){app.innerHTML=head()+'<div class="card"><h2>1단계: 평소 더 좋아하는 색은?</h2><p class="mut">점수는 없습니다.</p><div class="row"><button class="r" onclick="setPref(\'빨강\')">빨강</button><button class="b" onclick="setPref(\'파랑\')">파랑</button></div></div>'}
+
 async function setPref(c){S.pref=c;beep(500,.08);await loadCfg();save();view(play)}
+
 function play(){
+
   var n=S.choices.length;
+
   app.innerHTML=head()+'<div class="card"><div class="top"><b>'+(n+1)+' / '+TOTAL+' 회</b><span class="mut">누적 점수</span></div><div class="bar"><i style="width:'+(n/TOTAL*100)+'%"></i></div><div class="score" id="sc">'+S.score+'</div><div class="row"><button class="r" onclick="pick(\'빨강\')">빨강</button><button class="b" onclick="pick(\'파랑\')">파랑</button></div></div>'
+
 }
+
 function pick(c){
+
   var p=c==="빨강"?cfg.red:cfg.blue;S.choices.push({c:c,p:p});S.score+=p;beep(440,.07);
+
   var f=document.createElement("div");f.className="float";f.style.color=c==="빨강"?"var(--red)":"var(--blue)";f.textContent="+"+p;document.body.appendChild(f);setTimeout(function(){f.remove()},1000);
+
   setTimeout(function(){beep(p>5?880:660,.15)},120);
+
   var s=$("#sc");if(s){s.textContent=S.score;s.classList.add("pop")}
+
   document.querySelectorAll(".row button").forEach(function(b){b.disabled=true});
+
   if(S.choices.length>=TOTAL){S.done=true;S.finishedAt=Date.now()}
+
   save();setTimeout(function(){if(S.done){beep(988,.4);view(result)}else view(play)},650)
+
 }
+
 async function save(){
+
   ls("p_"+S.sid,S);
+
   if(!FB_URL)return;
+
   try{await api("participants/"+S.sid,"PUT",S);if(S.done)await api("board/"+S.sid,"PUT",{nick:S.nick,score:S.score,finishedAt:S.finishedAt})}catch(e){}
+
 }
+
 function result(){
+
   var rc=S.choices.filter(function(x){return x.c==="빨강"}).length,bc=S.choices.length-rc;
+
   var h=function(l,v,col){return '<div class="hb"><span>'+l+'</span><div class="bar"><i style="width:'+(v/TOTAL*100)+'%;background:'+col+'"></i></div><b>'+v+'</b></div>'};
+
   var pr=S.pref==="빨강"?1:0;
+
   app.innerHTML=head()+'<div class="card"><h1>실험 결과</h1><p class="mut">최종 점수</p><div class="score">'+S.score+'점</div><p>초기 선호 색: <b>'+S.pref+'</b></p><h2>초기 선호 vs 반복 선택</h2><p class="mut">초기 선호(1회)</p>'+h("빨강",pr,"var(--red)")+h("파랑",1-pr,"var(--blue)")+'<p class="mut">반복 선택('+TOTAL+'회)</p>'+h("빨강",rc,"var(--red)")+h("파랑",bc,"var(--blue)")+'<h2>선택 기록</h2><table>'+S.choices.map(function(x,i){return '<tr><td>'+(i+1)+'회</td><td>'+x.c+'</td><td>+'+x.p+'</td></tr>'}).join("")+'</table></div><button onclick="view(board)">전체 순위표 보기</button>'
+
 }
+
 function rank(rows){
+
   rows=rows.slice().sort(function(a,b){return b.score-a.score||(cfg.tie==="time"?a.finishedAt-b.finishedAt:0)});
+
   var r=0;return rows.map(function(x,i){if(i==0||x.score!==rows[i-1].score||cfg.tie==="time")r=i+1;return Object.assign({rank:r},x)})
+
 }
+
 function localList(k){var o=[];try{for(var n in localStorage)if(n.indexOf("p_")===0)o.push(JSON.parse(localStorage[n]))}catch(e){}return o}
+
 async function board(){
+
   var rows=[];await loadCfg();
+
   try{rows=FB_URL?Object.values(await getJ("board")||{}):localList().filter(function(p){return p.done}).map(function(p){return{nick:p.nick,score:p.score,finishedAt:p.finishedAt}})}catch(e){}
+
   if(cur!==board)return;
+
   rows=rank(rows);
+
   app.innerHTML=head()+'<div class="card"><h1>순위표</h1><p class="mut">상위 5명에게 간식이 제공됩니다. 동점 기준: '+(cfg.tie==="time"?"먼저 완료한 참가자가 높은 순위":"동점은 공동 순위")+'</p><table><tr><th>순위</th><th>닉네임</th><th>점수</th></tr>'+(rows.map(function(x){return '<tr><td>'+x.rank+'</td><td>'+esc(x.nick)+'</td><td>'+x.score+'</td></tr>'}).join("")||'<tr><td colspan="3" class="mut">아직 완료한 참가자가 없습니다.</td></tr>')+'</table></div><button onclick="next()">'+(S.sid?"내 결과로":"등록 화면으로")+'</button>'
+
 }
+
 /* ===== 관리자 ===== */
+
 async function sha(t){if(!(window.crypto&&crypto.subtle))return t==="9292"?PWH:"";var b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,"0")}).join("")}
+
 function adminEntry(){view(adminOK?adminView:adminLogin)}
+
 function adminLogin(){app.innerHTML=head()+'<div class="card"><h1>관리자 로그인</h1><label>비밀번호</label><input id="pw" type="password" inputmode="numeric"><p class="err" id="err"></p><button onclick="checkPw()">들어가기</button><p style="text-align:center"><button class="ghost" onclick="next()">돌아가기</button></p></div>'}
+
 async function checkPw(){var p=$("#pw").value;if((await sha(p))===PWH){adminOK=true;view(adminView)}else $("#err").textContent="비밀번호가 맞지 않습니다."}
+
 var parts=[];
+
 function adminView(){
+
   app.innerHTML=head()+'<div class="card"><h1>관리자</h1><p id="cnt"></p><h2>점수 설정</h2><label>빨강 점수</label><input id="cr" type="number" value="'+cfg.red+'"><label>파랑 점수</label><input id="cb" type="number" value="'+cfg.blue+'"><label>동점 처리</label><select id="ct"><option value="time"'+(cfg.tie==="time"?" selected":"")+'>먼저 완료한 사람이 우선</option><option value="share"'+(cfg.tie==="share"?" selected":"")+'>공동 순위</option></select><button onclick="saveCfg()">설정 저장</button><p class="err" id="msg"></p><h2>순위표 관리</h2><label>순위표에서 제거할 학번</label><input id="dl"><button class="ghost" onclick="delRow()">제거</button><h2>전체 기록 삭제</h2><p class="mut">모든 참가자 기록, 순위표, 중복 검사 기록이 삭제되며 되돌릴 수 없습니다. 점수 설정은 유지됩니다. CSV를 먼저 내려받아 두세요.</p><label>확인을 위해 삭제 라고 입력하세요</label><input id="wp"><button style="background:var(--red)" onclick="wipeAll()">전체 기록 삭제</button><p class="err" id="wm"></p><h2>참가자 기록</h2><div style="overflow-x:auto"><table id="tbl"></table></div><br><button onclick="csv()">CSV 다운로드</button><textarea id="csvout" rows="4" placeholder="CSV 내용이 여기에도 표시됩니다 (복사해서 사용 가능)"></textarea></div><button onclick="next()">돌아가기</button>';
+
   loadCfg().then(function(){if(cur===adminView){$("#cr").value=cfg.red;$("#cb").value=cfg.blue;$("#ct").value=cfg.tie}});
+
   loadParts()
+
 }
+
 async function loadParts(){
+
   try{parts=FB_URL?Object.values(await getJ("participants")||{}):localList()}catch(e){parts=[]}
+
   if(cur!==adminView||!$("#tbl"))return;
+
   parts.sort(function(a,b){return (b.score||0)-(a.score||0)});
+
   $("#cnt").innerHTML="전체 참가자 <b>"+parts.length+"</b>명 / 완료 <b>"+parts.filter(function(x){return x.done}).length+"</b>명 (학번 기준 중복 없음)";
+
   $("#tbl").innerHTML='<tr><th>학번</th><th>이름</th><th>닉</th><th>초기</th><th>점수</th><th>선택</th></tr>'+parts.map(function(x){return '<tr><td>'+esc(x.sid)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.nick)+'</td><td>'+esc(x.pref||"")+'</td><td>'+(x.score||0)+'</td><td>'+(x.choices||[]).map(function(c){return c.c[0]}).join("")+'</td></tr>'}).join("")
+
 }
+
 async function saveCfg(){
+
   cfg={red:+$("#cr").value||0,blue:+$("#cb").value||0,tie:$("#ct").value};var m=$("#msg");
+
   try{if(FB_URL){var r=await api("config","PUT",cfg);if(!r.ok)throw 0}m.textContent="저장했습니다."}catch(e){m.textContent="저장하지 못했습니다."}
+
 }
+
 async function wipeAll(){
+
   var m=$("#wm");if($("#wp").value.trim()!=="삭제"){m.textContent="확인란에 삭제 라고 입력해 주세요.";return}
+
   try{
+
     if(FB_URL){for(var k of ["participants","board","claims"]){var r=await api(k,"DELETE");if(!r.ok)throw 0}}
+
     else{try{Object.keys(localStorage).forEach(function(n){if(n.indexOf("p_")===0)localStorage.removeItem(n)})}catch(e){}}
+
     ls("me",null);S={sid:"",name:"",nick:"",pref:null,choices:[],score:0,done:false};parts=[];
+
     $("#wp").value="";m.textContent="전체 기록을 삭제했습니다.";loadParts()
+
   }catch(e){m.textContent="삭제하지 못했습니다. 다시 시도해 주세요."}
+
 }
+
 async function delRow(){var s=$("#dl").value.trim(),m=$("#msg");if(!s)return;try{if(FB_URL)await api("board/"+s,"DELETE");m.textContent="제거했습니다."}catch(e){m.textContent="실패했습니다."}}
+
 function csv(){
+
   var q=function(v){return '"'+String(v).replace(/"/g,'""')+'"'},hd=["학번","이름","닉네임","초기선호","최종점수","완료"];
+
   for(var i=1;i<=TOTAL;i++)hd.push(i+"회색",i+"회점");
+
   var L=[hd.join(",")];
+
   parts.forEach(function(x){var c=x.choices||[],r=[x.sid,x.name,x.nick,x.pref||"",x.score||0,x.done?"Y":"N"];for(var i=0;i<TOTAL;i++)r.push(c[i]?c[i].c:"",c[i]?c[i].p:"");L.push(r.map(q).join(","))});
+
   var t=L.join("\n");$("#csvout").value=t;
+
   try{var a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+t],{type:"text/csv"}));a.download="experiment_results.csv";document.body.appendChild(a);a.click();a.remove()}catch(e){}
+
 }
+
 (async function(){await loadCfg();var me=ls("me");if(me){var p=ls("p_"+me);if(p){S=p;if(FB_URL){try{var q=await getJ("participants/"+me);if(q){S=Object.assign(p,q);if(!S.choices)S.choices=[]}else{ls("p_"+me,null);ls("me",null);view(reg);return}}catch(e){}}next();return}}view(reg)})();
+
 </script></body></html>
+
 
